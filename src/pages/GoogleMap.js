@@ -1,8 +1,7 @@
 import styled from "styled-components";
-import React, { useEffect } from "react";
+import React, { useEffect, useState } from "react";
 import '../style/ggmapApi.css'; 
 
-// 스타일링된 Wrapper 컴포넌트
 const Wrapper = styled.div`
     display: flex;
     flex-direction: column;
@@ -11,106 +10,150 @@ const Wrapper = styled.div`
     height: 100vh;
 `;
 
-// GoogleMap 컴포넌트 정의
 export default function GoogleMap() {
-    useEffect(() => {
-        // 마커를 담을 배열
-        var markers = [];
+    const [markers, setMarkers] = useState([]);
+    const [infowindow, setInfowindow] = useState(null);
 
-        // 마커 클릭 시 장소 이름을 표시할 InfoWindow
-        var infowindow = new window.google.maps.InfoWindow({ zIndex: 1 });
+    useEffect(() => {
         const container = document.getElementById('map');
 
-        // 사용자의 현재 위치 가져오기
         if (navigator.geolocation) {
             navigator.geolocation.getCurrentPosition(function (position) {
                 const lat = position.coords.latitude;
                 const lng = position.coords.longitude;
 
-                // 지도 옵션 설정
                 const options = {
-                    center: { lat: lat, lng: lng }, // 사용자의 현재 위치를 중심으로 설정
-                    zoom: 15 // 기본 줌 레벨
+                    center: { lat: lat, lng: lng },
+                    zoom: 15
                 };
 
-                // 지도 생성 및 객체 리턴
                 const map = new window.google.maps.Map(container, options);
 
-                // 사용자의 현재 위치에 마커 추가
-                var userMarker = new window.google.maps.Marker({
+                const userMarker = new window.google.maps.Marker({
                     position: { lat: lat, lng: lng },
-                    map: map
+                    map: map,
+                    title: "Your current location"
                 });
 
-                // 장소 검색을 위한 PlaceService 객체 생성
                 const placesService = new window.google.maps.places.PlacesService(map);
 
-                // 사용자 위치 근처의 식당 검색
-                placesService.nearbySearch({
-                    location: { lat: lat, lng: lng },
-                    radius: 3000,
-                    type: 'restaurant'
-                }, placesSearchCallback);
-
-                // 검색 버튼에 대한 클릭 이벤트 핸들러 추가
                 const searchButton = document.getElementById('searchButton');
                 if (searchButton) {
                     searchButton.addEventListener('click', searchPlaces);
                 }
 
-                // 키워드 검색을 요청하는 함수
                 function searchPlaces() {
-                    var keyword = document.getElementById('keyword').value;
-
-                    if (!keyword.replace(/^\s+|\s+$/g, '')) {
-                        alert('키워드를 입력해주세요!');
-                        return false;
+                    const keyword = document.getElementById('keyword').value.trim();
+                    if (!keyword) {
+                        alert('Please enter a keyword!');
+                        return;
                     }
 
                     placesService.textSearch({
-                        query: keyword
+                        query: keyword,
+                        location: { lat: lat, lng: lng },
+                        radius: 3000,
+                        type: 'restaurant'
                     }, placesSearchCallback);
                 }
 
-                // 검색 결과를 처리하는 콜백 함수
                 function placesSearchCallback(results, status) {
                     if (status === window.google.maps.places.PlacesServiceStatus.OK) {
-                        // 이전 마커 제거
-                        markers.forEach(marker => {
-                            marker.setMap(null);
-                        });
-                        markers = [];
-
-                        // 새로운 마커 표시
                         results.forEach(place => {
-                            var marker = new window.google.maps.Marker({
+                            const marker = new window.google.maps.Marker({
                                 position: place.geometry.location,
                                 map: map,
                                 title: place.name
                             });
 
-                            // 마커 클릭 이벤트 리스너 추가
                             marker.addListener('click', function () {
-                                infowindow.setContent(place.name);
-                                infowindow.open(map, this);
+                                if (infowindow) infowindow.close();
+                                const newInfowindow = new window.google.maps.InfoWindow({ content: place.name });
+                                setInfowindow(newInfowindow);
+                                newInfowindow.open(map, this);
                             });
 
-                            // 마커 배열에 추가
-                            markers.push(marker);
+                            setMarkers(prevMarkers => [...prevMarkers, marker]);
                         });
+
+                        renderPlaceList(results);
                     } else {
-                        alert('검색 결과가 없습니다!');
+                        alert('No results found!');
                     }
                 }
+
+                function renderPlaceList(places) {
+                    const placesList = document.getElementById('placesList');
+                    placesList.innerHTML = '';
+                    places.forEach((place, index) => {
+                        const listItem = document.createElement('li');
+                        listItem.className = 'item';
+                
+                        const markerImg = document.createElement('img');
+                        if (place.photos && place.photos.length > 0) {
+                            markerImg.src = place.photos[0].getUrl({ maxWidth: 100, maxHeight: 100 });
+                        } else {
+                            markerImg.src = 'placeholder.jpg'; 
+                        }
+                        markerImg.alt = 'No image';
+                        markerImg.className = 'marker-img';
+                        listItem.appendChild(markerImg);
+                
+                        const info = document.createElement('div');
+                        info.className = 'info';
+                
+                        const title = document.createElement('h5');
+                        title.textContent = place.name;
+                        info.appendChild(title);
+                
+                        const address = document.createElement('p');
+                        address.textContent = place.formatted_address;
+                        address.className = 'gray';
+                        info.appendChild(address);
+                
+                        if (place.geometry && place.geometry.location) {
+                            const distance = document.createElement('p');
+                            distance.textContent = `Distance: ${place.geometry.location.distance}`; // Lấy thông tin khoảng cách
+                            distance.className = 'gray';
+                            info.appendChild(distance);
+                        }
+                
+                        if (place.rating) {
+                            const rating = document.createElement('p');
+                            rating.textContent = `Rating: ${place.rating}`;
+                            rating.className = 'gray';
+                            info.appendChild(rating);
+                        }
+                
+                        if (place.user_ratings_total) {
+                            const reviews = document.createElement('p');
+                            reviews.textContent = `Reviews: ${place.user_ratings_total}`;
+                            reviews.className = 'gray';
+                            info.appendChild(reviews);
+                        }
+                
+                        listItem.appendChild(info);
+                        placesList.appendChild(listItem);
+                
+                        listItem.addEventListener('click', () => {
+                            if (infowindow) infowindow.close();
+                            const newInfowindow = new window.google.maps.InfoWindow({ content: place.name });
+                            setInfowindow(newInfowindow);
+                            newInfowindow.open(map);
+                        });
+                    });
+                }
+                
+                
             });
         } else {
-            console.log("이 브라우저에서는 지오로케이션을 지원하지 않습니다.");
+            console.log("Geolocation is not supported by this browser.");
         }
 
-    }, []);
+    }, [infowindow]);
 
     function handleSubmit(event) {
-        event.preventDefault(); // 기본 제출 동작 방지
+        event.preventDefault();
     }
 
     return (
@@ -121,11 +164,13 @@ export default function GoogleMap() {
                     <div className="option">
                         <div>
                             <form onSubmit={handleSubmit}>
-                                키워드: <input type="text" id="keyword" defaultValue="" size="15" />
-                                <button id="searchButton" type="submit">검색</button>
+                               
+                            Keyword: <input type="text" id="keyword" defaultValue="" size="15" />
+                                <button id="searchButton" type="submit">Search</button>
                             </form>
                         </div>
                     </div>
+                    <ul id="placesList"></ul>
                 </div>
             </div>
         </Wrapper>
