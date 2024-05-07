@@ -1,9 +1,10 @@
+import React, { useState, useEffect } from "react";
 import Slider from "react-slick";
 import "../style/slick.css";
 import "../style/slick-theme.css";
 import styled from "styled-components";
-import { useEffect, useState, useRef } from "react";
-import RestaruantList from "./Restaurantlist";
+import RestaurantList from "./RestaurantList";
+
 
 const Wrapper = styled.div`
   margin: 0 auto;
@@ -27,79 +28,47 @@ const Category = styled.h4`
   }
 `;
 
-function NextArrow(props) {
-  const { className, style, onClick } = props;
-  return (
-    <div
-      className={className}
-      style={{ ...style, display: "block" }}
-      onClick={onClick}
-    />
-  );
-}
-
-function PrevArrow(props) {
-  const { className, style, onClick } = props;
-  return (
-    <div
-      className={className}
-      style={{ ...style, display: "block" }}
-      onClick={onClick}
-    />
-  );
-}
-
 function TypeSlider() {
   const [category, setCategory] = useState("전체");
-  const sliderRef = useRef(null);
   const [restaurantList, setRestaurantList] = useState([]);
 
-  const settings = {
-    className: "center",
-    dots: false,
-    centerMode: true,
-    infinite: true,
-    centerPadding: "60px",
-    slidesToShow: 2,
-    slidesToScroll: 2,
-    speed: 500,
-    nextArrow: <NextArrow />,
-    prevArrow: <PrevArrow />,
-    afterChange: (current) => {
-      const categoryList = ["전체", "한식", "일식", "중식", "양식", "디저트"];
-      setCategory(categoryList[current]);
-    },
-  };
-
-  const onCategory = (category) => {
-    setCategory(category);
-    const index = ["전체", "한식", "일식", "중식", "양식", "디저트"].indexOf(category);
-    sliderRef.current.slickGoTo(index);
-  };
+const settings = {
+  className: "center",
+  dots: false,
+  centerMode: true,
+  infinite: true,
+  centerPadding: "60px",
+  slidesToShow: 2,
+  slidesToScroll: 2,
+  speed: 500,
+  afterChange: (current) => {
+    const categoryList = ["전체", "한식", "일식", "중식", "양식", "디저트"];
+    setCategory(categoryList[current]);
+  },
+};
 
   useEffect(() => {
     const fetchRestaurantData = async () => {
       try {
-        const response = await fetch(
-          `https://maps.googleapis.com/maps/api/place/textsearch/json?query=${encodeURIComponent(
-            category + " restaurant"
-          )}&key=AIzaSyDuISEVEDwkElLoYRbG2EYmbxvvrzJ-W3g`
-        );
+        const response = await fetch(`/restaurants?category=${encodeURIComponent(category)}`);
         const data = await response.json();
         setRestaurantList(data.results);
       } catch (error) {
-        console.error("Error fetching restaurant data:", error);
+        console.error('Error fetching restaurant data:', error);
       }
     };
-
     fetchRestaurantData();
   }, [category]);
+
+  const onCategory = (category) => {
+    setCategory(category);
+  };
 
   return (
     <Wrapper>
       <Title>카테고리</Title>
       <div className="slider-container">
-        <Slider ref={sliderRef} {...settings}>
+        <Slider {...settings}>
           <div onClick={() => onCategory("전체")}>
             <Category className={category === "전체" ? "active" : ""}>
               전체
@@ -132,9 +101,10 @@ function TypeSlider() {
           </div>
         </Slider>
       </div>
+      {/* Your RestaurantList component here */}
       <div>
         {category && (
-          <RestaruantList key={category} type={category} list={restaurantList} />
+          <RestaurantList key={category} type={category} list={restaurantList} />
         )}
       </div>
     </Wrapper>
