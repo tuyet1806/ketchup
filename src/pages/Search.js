@@ -89,6 +89,7 @@ function RestaurantItem({ restaurant }) {
       <Container>
         <img src={img || "http://via.placeholder.com/160"} alt={name} />
         <p className="name">{name.length > 8 ? `${name.slice(0, 7)}...` : name}</p>
+        console.log(name);
         <div className="box">
           <p className="star">
             <FaStar color="yellow" style={{ fontSize: "2em" }} />
