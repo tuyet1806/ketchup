@@ -1,39 +1,68 @@
 import styled from "styled-components";
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useRef, useState, useCallback } from "react";
 import '../style/ggmapApi.css';
 
-// 스타일된 구성요소
-const Wrapper = styled.div`
+// Styled components
+// 스타일된 컴포넌트들
+const Wrapper = styled.div` // Wrapper div for the entire component.
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  height: 100vh;
+  height: 100vh; // Full height of the viewport.
 `;
 
-const MapContainer = styled.div.withConfig({
+const Button = styled.button` // Styled button component.
+  position: fixed;
+  top: 10px;
+  left: 50%;
+  transform: translateX(-50%);
+  background-color: #ffffff;
+  border: 1px solid #cccccc;
+  border-radius: 5px;
+  padding: 10px 20px;
+  cursor: pointer;
+`;
+
+const ScrollButton = styled.button` // Styled button for scrolling to top.
+  position: fixed;
+  top: 10px;
+  left: 50%;
+  transform: translateX(-50%);
+  background-color: #ffffff;
+  border: 1px solid #cccccc;
+  border-radius: 5px;
+  padding: 10px 20px;
+  cursor: pointer;
+`;
+
+const MapContainer = styled.div.withConfig({ // Styled div for the map container.
   shouldForwardProp: (prop) => prop !== 'isExpanded',
 })`
   width: 100%;
-  height: ${({ isExpanded }) => (isExpanded ? '55%' : '100%')};
+  height: 100%;
   position: relative;
   overflow: hidden;
   transition: height 0.5s ease;
 `;
 
-const InfoContainer = styled.div.withConfig({
-  shouldForwardProp: (prop) => prop !== 'isVisible',
+const InfoContainer = styled.div.withConfig({ // Styled div for the info container.
+  shouldForwardProp: (prop) => prop !== 'isFullScreen',
 })`
-  position: relative;
-  width: 100%;
-  height: 45%;
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  width: 97%;
+  height: ${({ isFullScreen }) => (isFullScreen ? '100%' : '45%')}; // Dynamic height based on fullscreen mode.
   overflow-y: auto;
   padding: 10px;
   background: #fff;
-  display: ${({ isVisible }) => (isVisible ? 'block' : 'none')};
+  z-index: 1000;
+  transition: height 0.5s ease;
+  display: ${({ isVisible }) => (isVisible ? 'block' : 'none')}; // Show/hide based on visibility.
 `;
 
-const ButtonContainer = styled.div`
+const ButtonContainer = styled.div` // Container for buttons within the info container.
   position: absolute;
   top: 10px;
   right: 10px;
@@ -42,53 +71,102 @@ const ButtonContainer = styled.div`
   gap: 10px;
 `;
 
-const PlacesList = styled.ul.withConfig({
-  shouldForwardProp: (prop) => prop !== 'isVisible',
-})`
-  display: ${({ isVisible }) => (isVisible ? 'block' : 'none')};
+const ListItem = styled.li` // Styled list item.
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px;
+  border-bottom: 1px solid #ccc;
+`;
+
+const ListItemImage = styled.img` // Styled image within list items.
+  width: 80px;
+  height: 80px;
+  border-radius: 5px;
+`;
+
+const ListItemInfo = styled.div` // Container for info within list items.
+  flex: 1;
+`;
+
+const ListItemTitle = styled.h5` // Title of list item.
+  margin: 0;
+`;
+
+const ListItemDistance = styled.p` // Distance info within list item.
+  margin: 5px 0;
+  color: #888;
+`;
+
+const PlacesList = styled.ul` // Styled list for places.
+  display: ${({ isVisible }) => (isVisible ? 'block' : 'none')}; // Show/hide based on visibility.
   width: 100%;
-  height: 45%;
+  height: 45%; // 45% height of the container.
   padding: 0;
   list-style: none;
   overflow-y: auto;
+  margin-top: 10px;
 `;
 
-const DetailText = styled.p`
+const DetailText = styled.p` // Styled text for details.
   margin-bottom: 10px;
   font-size: 16px;
   line-height: 1.5;
 `;
 
-const PhotoContainer = styled.div`
+const PhotoContainer = styled.div` // Container for photos within details.
   display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
   overflow-x: auto;
 `;
 
-const DetailImage = styled.img`
+const DetailImage = styled.img` // Styled image within details.
   width: 200px;
   height: auto;
   margin-right: 10px;
+  cursor: pointer;
+  border-radius: 5px;
+  transition: transform 0.3s ease;
+  &:hover { // Scale effect on hover.
+    transform: scale(1.05);
+  }
 `;
 
-const SearchForm = styled.form`
+const SearchForm = styled.form` // Styled form for search.
   margin-bottom: 10px;
 `;
 
-// 구글맵 컴포넌트
+// GoogleMap component
+// GoogleMap 컴포넌트
 export default function GoogleMap() {
-  const [markers, setMarkers] = useState([]);
-  const [infowindow, setInfowindow] = useState(null);
-  const [selectedPlace, setSelectedPlace] = useState(null);
-  const [map, setMap] = useState(null);
-  const [isExpanded, setIsExpanded] = useState(false);
-  const [listVisible, setListVisible] = useState(false);
-  const [highlightedMarker, setHighlightedMarker] = useState(null);
-  const [currentLocationMarker, setCurrentLocationMarker] = useState(null);
-  const [searchKeyword, setSearchKeyword] = useState('');
-  const [previousSearchResults, setPreviousSearchResults] = useState([]);
+  // State variables declaration
+  // 상태 변수 선언
+  const [markers, setMarkers] = useState([]); // Markers array state
+  const [infowindow, setInfowindow] = useState(null); // Info window state
+  const [selectedPlaceDetails, setSelectedPlaceDetails] = useState(null); // Selected place details state
+  const [map, setMap] = useState(null); // Map state
+  const [isExpanded, setIsExpanded] = useState(false); // Expanded state
+  const [isFullScreen, setIsFullScreen] = useState(false); // Fullscreen state
+  const [listVisible, setListVisible] = useState(false); // List visibility state
+  const [highlightedMarker, setHighlightedMarker] = useState(null); // Highlighted marker state
+  const [currentLocationMarker, setCurrentLocationMarker] = useState(null); // Current location marker state
+  const [searchKeyword, setSearchKeyword] = useState(''); // Search keyword state
+  const [previousSearchResults, setPreviousSearchResults] = useState([]); // Previous search results state
+  const [scrolling, setScrolling] = useState(false); // Scrolling state
 
+  // Function to scroll to top
+  // 맨 위로 스크롤하는 함수
+  const scrollToTop = () => {
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  // Reference for places list
+  // 장소 목록을 위한 참조
   const placesListRef = useRef(null);
 
+  // Effect hook to handle geolocation and initialize map
+  // 지리적 위치 및 지도 초기화 처리를 위한 효과 훅
   useEffect(() => {
     const container = document.getElementById('map');
 
@@ -118,218 +196,270 @@ export default function GoogleMap() {
     }
   }, []);
 
-  useEffect(() => {
-    if (!map) return;
+  // Callback function to render place list items
+// 장소 목록 항목을 렌더링하는 콜백 함수
+const renderPlaceList = useCallback((place, distance, marker, index) => {
+  const placesList = placesListRef.current;
+  if (!placesList) return;
 
-    const searchPlaces = (keyword, location) => {
-      if (!keyword || !location) {
-        return;
-      }
+  const listItem = document.createElement('li');
+  listItem.className = 'item';
 
-      setListVisible(true);
-      setIsExpanded(false); // 검색할 때 정보 컨테이너를 숨김
+  listItem.addEventListener('click', function () {
+    fetchPlaceDetails(place.place_id, marker);
+  });
 
-      const request = {
-        query: keyword,
-        location: location,
-        radius: 3000,
-        type: 'restaurant'
-      };
+  const markerImg = document.createElement('img');
+  if (place.photos && place.photos.length > 0) {
+    markerImg.src = place.photos[0].getUrl({ maxWidth: 150, maxHeight: 150 });
+  } else {
+    markerImg.src = 'placeholder.jpg';
+  }
+  markerImg.size = [{ maxWidth: 40, maxHeight: 40 }];
+  markerImg.alt = 'No image available';
+  markerImg.className = 'marker-img';
+  listItem.appendChild(markerImg);
 
-      const placesService = new window.google.maps.places.PlacesService(map);
-      placesService.textSearch(request, (results, status) => {
-        if (status === window.google.maps.places.PlacesServiceStatus.OK) {
-          const newMarkers = [];
+  const info = document.createElement('div');
+  info.className = 'info';
 
-          results.forEach((place, index) => {
-            const distance = window.google.maps.geometry.spherical.computeDistanceBetween(
-              location,
-              place.geometry.location
-            );
+  const title = document.createElement('h5');
+  title.textContent = place.name;
+  info.appendChild(title);
 
-            if (distance <= 3000) {
-              const marker = new window.google.maps.Marker({
-                position: place,
-                position: place.geometry.location,
-                map: map,
-                title: place.name
-              });
+  const distanceElement = document.createElement('p');
+  distanceElement.textContent = `거리: ${Math.round(distance / 1000)} km`;
+  distanceElement.className = 'gray';
+  info.appendChild(distanceElement);
 
-              marker.addListener('click', function () {
-                if (infowindow) {
-                  infowindow.close();
-                }
-                const newInfowindow = new window.google.maps.InfoWindow({ content: place.name });
-                setInfowindow(newInfowindow);
-                newInfowindow.open(map, this);
-                setSelectedPlace(place);
-                setIsExpanded(true);
-                setListVisible(false); // 정보를 보여줄 때 목록을 숨김
+  listItem.appendChild(info);
+  placesList.appendChild(listItem);
 
-                if (highlightedMarker) {
-                  highlightedMarker.setIcon(null);
-                }
-                marker.setIcon('http://maps.google.com/mapfiles/ms/icons/blue-dot.png');
-                setHighlightedMarker(marker);
-              });
+  listItem.setAttribute('data-marker-id', index);
 
-              newMarkers.push(marker);
-              renderPlaceList(place, distance, marker, index);
-            }
-          });
-
-          setMarkers(newMarkers);
-        } else {
-          alert('No results found!');
-        }
-      });
-    };
-
-    window.searchPlaces = searchPlaces;
-  }, [map, infowindow, highlightedMarker]);
-
-  const handleSearch = (event) => {
-    event.preventDefault();
-    handleButtonClick(searchKeyword);
+  const handleClick = () => {
+    fetchPlaceDetails(place.place_id, marker);
   };
+}, [infowindow, map, highlightedMarker]);
 
-  const handleButtonClick = (keyword) => {
-    setSearchKeyword(keyword);
-    setListVisible(true);
-    setIsExpanded(false); // 새로운 검색을 시작할 때 상세 정보를 숨김
+// Function to fetch place details
+// 장소 세부 정보를 가져오는 함수
+const fetchPlaceDetails = (placeId, marker) => {
+  const service = new window.google.maps.places.PlacesService(map);
+  service.getDetails({ placeId }, (place, status) => {
+    if (status === window.google.maps.places.PlacesServiceStatus.OK) {
+      setSelectedPlaceDetails(place);
+      setIsExpanded(true);
+      setListVisible(false);
 
-    if (currentLocationMarker && map) {
-      map.panTo(currentLocationMarker.getPosition());
-      window.searchPlaces(keyword, currentLocationMarker.getPosition());
-    }
-
-    // 새로운 검색을 시작할 때 이전 마커를 지움
-    markers.forEach(marker => marker.setMap(null));
-    setMarkers([]);
-
-    // 이전 검색 결과를 저장
-    setPreviousSearchResults(markers);
-  };
-
-  const handleCloseInfo = () => {
-    setSelectedPlace(null);
-    setIsExpanded(false);
-    setListVisible(true);
-    if (infowindow) {
-      infowindow.close();
-    }
-    if (highlightedMarker) {
-      highlightedMarker.setIcon(null);
-    }
-
-    // 상세 정보를 닫을 때 이전 목록을 다시 표시
-    setMarkers(previousSearchResults);
-  };
-
-  const renderPlaceList = (place, distance, marker, index) => {
-    const placesList = placesListRef.current;
-    if (!placesList) return;
-
-    const listItem = document.createElement('li');
-    listItem.className = 'item';
-
-    listItem.addEventListener('click', function () {
       if (infowindow) {
         infowindow.close();
       }
       const newInfowindow = new window.google.maps.InfoWindow({ content: place.name });
       setInfowindow(newInfowindow);
       newInfowindow.open(map, marker);
-      setSelectedPlace(place);
-      setIsExpanded(true);
-      setListVisible(false); // 정보를 표시할 때 목록을 숨김
-      if (map) {
-        map.setCenter(marker.getPosition());
-      }
 
       if (highlightedMarker) {
         highlightedMarker.setIcon(null);
       }
       marker.setIcon('http://maps.google.com/mapfiles/ms/icons/blue-dot.png');
       setHighlightedMarker(marker);
-    });
-    
-    const markerImg = document.createElement('img');
-    if (place.photos && place.photos.length > 0) {
-      markerImg.src = place.photos[0].getUrl({ maxWidth: 150, maxHeight:1500 });
-    } else {
-      markerImg.src = 'placeholder.jpg';
     }
-    markerImg.size = [{ maxWidth: 40, maxHeight: 40 }];
-    markerImg.alt = 'No image available';
-    markerImg.className = 'marker-img';
-    listItem.appendChild(markerImg);
-    
-    const info = document.createElement('div');
-    info.className = 'info';
-  
-    const title = document.createElement('h5');
-    title.textContent = place.name;
-    info.appendChild(title);
-  
-    const distanceElement = document.createElement('p');
-    distanceElement.textContent = `거리: ${Math.round(distance / 1000)} km`;
-    distanceElement.className = 'gray';
-    info.appendChild(distanceElement);
-  
-    listItem.appendChild(info);
-    placesList.appendChild(listItem);
-  
-    listItem.setAttribute('data-marker-id', index)
-  }    
-   
-  return (
-    <Wrapper>
-      <SearchForm onSubmit={handleSearch}>
-        <input
-          type="text"
-          id="keyword"
-          value={searchKeyword}
-          onChange={(e) => setSearchKeyword(e.target.value)}
-          placeholder="Enter keyword..."
-          size="15"
-        />
-        <button id="searchButton" type="submit">Search</button>
-      </SearchForm>
-      <MapContainer isExpanded={isExpanded}>
-        <div id="map" style={{ width: '100%', height: '100%' }}></div>
-        <ButtonContainer>
-          <button onClick={() => handleButtonClick('asian')}>Asian Restaurant</button>
-          <button onClick={() => handleButtonClick('western')}>Western Restaurant</button>
+  });
+};
+
+// RestaurantList component
+// RestaurantList 컴포넌트
+const RestaurantList = () => {
+  const [isExpanded, setIsExpanded] = useState(false);
+
+  const handleButtonClick = () => {
+    setIsExpanded(!isExpanded);
+  }
+};
+
+// Effect hook for search functionality and map initialization
+// 검색 기능과 지도 초기화를 위한 효과 훅
+useEffect(() => {
+  if (!map) return;
+
+  const handleScroll = () => {
+    if (window.scrollY > 100) {
+      setScrolling(true);
+    } else {
+      setScrolling(false);
+    }
+  };
+  window.addEventListener('scroll', handleScroll);
+
+  const searchPlaces = (keyword, location) => {
+    if (!keyword || !location) {
+      return;
+    }
+
+    setListVisible(true);
+    setIsExpanded(false); // Hide info container when searching
+
+    const request = {
+      query: keyword,
+      location: location,
+      radius: 3000,
+      type: 'restaurant'
+    };
+
+    const placesService = new window.google.maps.places.PlacesService(map);
+    placesService.textSearch(request, (results, status) => {
+      if (status === window.google.maps.places.PlacesServiceStatus.OK) {
+        const newMarkers = [];
+
+        results.forEach((place, index) => {
+          const distance = window.google.maps.geometry.spherical.computeDistanceBetween(
+            location,
+            place.geometry.location
+          );
+
+          if (distance <= 5000) {
+            const marker = new window.google.maps.Marker({
+              position: place.geometry.location,
+              map: map,
+              title: place.name
+            });
+
+            marker.addListener('click', function () {
+              fetchPlaceDetails(place.place_id, marker);
+            });
+
+            newMarkers.push(marker);
+            renderPlaceList(place, distance, marker, index);
+          }
+        });
+
+        setMarkers(newMarkers);
+      } else {
+        alert('No results found!');
+      }
+    });
+  };
+
+  window.searchPlaces = searchPlaces;
+  return () => {
+    window.removeEventListener('scroll', handleScroll);
+  };
+}, [map, renderPlaceList]);
+
+// Function to handle search button click
+// 검색 버튼 클릭을 처리하는 함수
+const handleButtonClick = (keyword) => {
+  if (!currentLocationMarker) {
+    console.error('Current location not available.');
+    return;
+  }
+
+  const location = currentLocationMarker.getPosition();
+  window.searchPlaces(keyword, location);
+
+  markers.forEach((marker) => {
+    marker.setMap(null);
+  });
+
+  setMarkers([]);
+  setPreviousSearchResults([]);
+};
+
+// Function to handle search form submission
+// 검색 양식 제출을 처리하는 함수
+const handleSearch = (event) => {
+  event.preventDefault();
+  const keyword = searchKeyword;
+  setIsExpanded(false); // Hide detail info when starting new search
+
+  if (currentLocationMarker && map) {
+    map.panTo(currentLocationMarker.getPosition());
+    window.searchPlaces(keyword, currentLocationMarker.getPosition());
+  }
+
+  markers.forEach(marker => marker.setMap(null));
+  setMarkers([]);
+  setPreviousSearchResults([]);
+};
+
+// Function to close info container
+// 정보 컨테이너를 닫는 함수
+const handleCloseInfo = () => {
+  setSelectedPlaceDetails(null);
+  setIsExpanded(false);
+  setListVisible(true);
+  if (infowindow) {
+    infowindow.close();
+  }
+  if (highlightedMarker) {
+    highlightedMarker.setIcon(null);
+  }
+
+  previousSearchResults.forEach(marker => marker.setMap(map));
+  setMarkers(previousSearchResults);
+};
+
+// Function to toggle fullscreen mode
+// 전체 화면 모드를 전환하는 함수
+const handleToggleFullScreen = () => {
+  setIsFullScreen(!isFullScreen);
+};
+
+// Return statement rendering the component
+// 컴포넌트를 렌더링하는 반환문
+return (
+  <Wrapper>
+    <SearchForm onSubmit={handleSearch}>
+      <input
+        type="text"
+        id="keyword"
+        value={searchKeyword}
+        onChange={(e) => setSearchKeyword(e.target.value)}
+        placeholder="Enter keyword..."
+        size="15"
+      />
+      <button id="searchButton" type="submit">Search</button>
+    </SearchForm>
+    <MapContainer isExpanded={isExpanded}>
+      <div id="map" style={{ width: '100%', height: '100%' }}></div>
+      <ButtonContainer>
+        <button onClick={() => handleButtonClick('asian')}>Asian Restaurant</button>
+        <button onClick={() => handleButtonClick('western')}>Western Restaurant</button>
           <button onClick={() => handleButtonClick('caffe')}>Caffe</button>
         </ButtonContainer>
       </MapContainer>
-      {listVisible && <PlacesList ref={placesListRef} isVisible={listVisible}></PlacesList>}
+      {listVisible && <PlacesList ref={placesListRef} isVisible={listVisible}>
+        {/* Place List items will be appended here */}
+      </PlacesList>}
       {isExpanded && (
-        <InfoContainer isVisible={isExpanded}>
+        <InfoContainer isVisible={isExpanded} isFullScreen={isFullScreen}>
           <ButtonContainer>
             <button onClick={handleCloseInfo}>Close</button>
+            <button onClick={handleToggleFullScreen}>
+              {isFullScreen ? 'Collapse' : 'Expand'}
+            </button>
           </ButtonContainer>
-          {selectedPlace ? (
+          {selectedPlaceDetails ? (
             <div>
-              <h2>{selectedPlace.name}</h2>
-              <DetailText>Address: {selectedPlace.formatted_address}</DetailText>
-              <DetailText>Phone number: {selectedPlace.formatted_phone_number || 'N/A'}</DetailText>
+              <h2>{selectedPlaceDetails.name}</h2>
+              <DetailText>Address: {selectedPlaceDetails.formatted_address}</DetailText>
+              <DetailText>Phone number: {selectedPlaceDetails.formatted_phone_number || 'N/A'}</DetailText>
               <PhotoContainer>
-                {selectedPlace.photos && selectedPlace.photos.length > 0 ? 
-                  selectedPlace.photos.map((photo, index) => (
-                    <DetailImage key={index} src={photo.getUrl({ maxWidth: 200 })} alt={`Place photo ${index + 1}`} />
-                  )) 
+                {selectedPlaceDetails.photos && selectedPlaceDetails.photos.length > 0 ?
+                  selectedPlaceDetails.photos.map((photo, index) => (
+                    <DetailImage key={index} src={photo.getUrl({ maxWidth: 150 })} alt={`Place photo ${index + 1}`} />
+                  ))
                   : 'No photos available'
                 }
               </PhotoContainer>
-              <DetailText>Rating: {selectedPlace.rating || 'N/A'}</DetailText>
-              <DetailText>Reviews: {selectedPlace.user_ratings_total || 'N/A'}</DetailText>
+              <DetailText>Rating: {selectedPlaceDetails.rating || 'N/A'}</DetailText>
+              <DetailText>Reviews: {selectedPlaceDetails.user_ratings_total || 'N/A'}</DetailText>
               <div className="reviews">
                 <h3>Reviews:</h3>
                 <ul>
-                  {selectedPlace.reviews && selectedPlace.reviews.length > 0 ? (
-                    selectedPlace.reviews.map((review, index) => (
+                  {selectedPlaceDetails.reviews && selectedPlaceDetails.reviews.length > 0 ? (
+                    selectedPlaceDetails.reviews.map((review, index) => (
                       <li key={index}>
                         <p>Author: {review.author_name}</p>
                         <p>Rating: {review.rating}</p>
@@ -345,6 +475,8 @@ export default function GoogleMap() {
           ) : null}
         </InfoContainer>
       )}
+      {scrolling && <ScrollButton onClick={scrollToTop}>Scroll to Top</ScrollButton>}
     </Wrapper>
   );
 }
+
